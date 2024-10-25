@@ -2,17 +2,18 @@ import * as fs from "fs";
 import * as path from "path";
 import * as http from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { messageController } from "./messageController";
 
 const __dirname = path.resolve(path.dirname(""));
 
 export const httpServer = http.createServer(
   (req: http.IncomingMessage, res: http.ServerResponse) => {
-    const file_path = path.join(
+    const filePath = path.join(
       __dirname,
       req.url === "/" ? "/front/index.html" : "/front" + req.url,
     );
 
-    fs.readFile(file_path, (err, data) => {
+    fs.readFile(filePath, (err, data) => {
       if (err) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "File not found" }));
@@ -28,31 +29,51 @@ export const httpServer = http.createServer(
 const wss = new WebSocketServer({ server: httpServer });
 
 wss.on("connection", (ws: WebSocket) => {
-  console.log("New WebSocket client connected");
+  console.log("Новый клиент подключен");
 
   ws.send(JSON.stringify({ message: "Welcome to Battleship!" }));
 
-  ws.on("message", (message: string) => {
-    console.log("Received:", message);
+  ws.on("message", (message: Buffer) => {
+    console.log("Сообщение получено от клиента в виде буфера:", message);
+
+    try {
+      const messageStr = message.toString();
+      console.log("Преобразованное сообщение в строку:", messageStr);
+
+      const request = JSON.parse(messageStr);
+
+      const { type, data } = request;
+
+      if (messageController[type]) {
+        console.log(`Обработка команды: ${type}`);
+        messageController[type](ws, data);
+      } else {
+        console.log(`Ошибка: неизвестная команда ${type}`);
+        ws.send(JSON.stringify({ error: true, message: "Unknown command" }));
+      }
+    } catch (error) {
+      console.log("Ошибка при парсинге JSON:", error.message);
+      ws.send(JSON.stringify({ error: true, message: "Invalid JSON format" }));
+    }
   });
 
   ws.on("close", () => {
-    console.log("WebSocket client disconnected");
+    console.log("Клиент отключен");
   });
 });
 
 process.on("SIGTERM", () => {
-  console.log("Closing server...");
+  console.log("Завершение работы сервера...");
   httpServer.close(() => {
-    console.log("Server closed");
+    console.log("Сервер закрыт");
     process.exit(0);
   });
 });
 
 process.on("SIGINT", () => {
-  console.log("Closing server...");
+  console.log("Завершение работы сервера...");
   httpServer.close(() => {
-    console.log("Server closed");
+    console.log("Сервер закрыт");
     process.exit(0);
   });
 });
