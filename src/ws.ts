@@ -1,29 +1,8 @@
-import * as fs from "fs";
-import * as path from "path";
-import * as http from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { messageController, players } from "../messageController";
+import { messageController, players } from "./messageController";
+import { httpServer } from "./http_server/index"; // Импортируем HTTP сервер
 
-const __dirname = path.resolve(path.dirname(""));
 const clients: Set<WebSocket> = new Set();
-
-export const httpServer = http.createServer((req, res) => {
-  const filePath = path.join(
-    __dirname,
-    req.url === "/" ? "/front/index.html" : "/front" + req.url,
-  );
-
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "File not found" }));
-      return;
-    }
-
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(data);
-  });
-});
 
 const wss = new WebSocketServer({ server: httpServer });
 
@@ -68,18 +47,4 @@ function updateWinners() {
   });
 }
 
-process.on("SIGTERM", () => {
-  console.log("Завершение работы сервера...");
-  httpServer.close(() => {
-    console.log("Сервер закрыт");
-    process.exit(0);
-  });
-});
-
-process.on("SIGINT", () => {
-  console.log("Завершение работы сервера...");
-  httpServer.close(() => {
-    console.log("Сервер закрыт");
-    process.exit(0);
-  });
-});
+console.log("WebSocket сервер запущен через HTTP сервер.");
