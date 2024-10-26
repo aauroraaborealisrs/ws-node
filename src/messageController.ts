@@ -111,55 +111,73 @@ function handleCreateRoom(ws: WebSocket) {
   updateRoomState();
 }
 
-function handleAddUserToRoom(
-  ws: WebSocket,
-  data: { indexRoom: string },
-  playerName: string,
-) {
-  const { indexRoom } = data;
 
+function handleAddUserToRoom(ws: WebSocket, data: string) {
+  console.log("Получен запрос на добавление в комнату с данными (в виде строки):", data);
+
+  
+  const match = data.match(/"indexRoom"\s*:\s*"([^"]+)"/);
+
+  
+  const indexRoom = match ? match[1] : undefined;
+
+  if (!indexRoom) {
+    console.log("Ошибка: indexRoom не определен или отсутствует.");
+    ws.send(
+      JSON.stringify({
+        type: "add_user_to_room",
+        data: JSON.stringify({ error: true, errorText: "Room ID is not provided" }),
+        id: 0,
+      })
+    );
+    return;
+  }
+
+  console.log(`Запрос на добавление в комнату с ID: ${indexRoom}`);
+  console.log("Текущие комнаты:", rooms);
+
+  
   if (!rooms[indexRoom]) {
+    console.log(`Ошибка: комната ${indexRoom} не существует.`);
     ws.send(
       JSON.stringify({
         type: "add_user_to_room",
         data: JSON.stringify({ error: true, errorText: "Room does not exist" }),
         id: 0,
-      }),
+      })
     );
     return;
   }
 
   const room = rooms[indexRoom];
 
+  
   if (room.players.length >= 2) {
+    console.log(`Ошибка: комната ${indexRoom} уже полная.`);
     ws.send(
       JSON.stringify({
         type: "add_user_to_room",
-        data: JSON.stringify({
-          error: true,
-          errorText: "Room is already full",
-        }),
+        data: JSON.stringify({ error: true, errorText: "Room is already full" }),
         id: 0,
-      }),
+      })
     );
     return;
   }
 
+  
   room.players.push(ws);
-  console.log(`Игрок ${playerName} присоединился к комнате ${indexRoom}`);
-  console.log("Текущие комнаты:", rooms);
+  console.log(`Игрок успешно добавлен в комнату ${indexRoom}`);
+  console.log("Текущие комнаты после добавления:", rooms);
 
   ws.send(
     JSON.stringify({
       type: "add_user_to_room",
-      data: JSON.stringify({
-        roomId: indexRoom,
-        message: "You have joined the room",
-      }),
+      data: JSON.stringify({ roomId: indexRoom, message: "You have joined the room" }),
       id: 0,
-    }),
+    })
   );
 
+  
   if (room.players.length === 2) {
     startGame(room);
     delete rooms[indexRoom];
@@ -167,6 +185,10 @@ function handleAddUserToRoom(
     updateRoomState();
   }
 }
+
+
+
+
 
 function generateRoomId() {
   return `room_${Math.random().toString(36).substr(2, 9)}`;
