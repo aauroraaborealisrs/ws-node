@@ -119,7 +119,6 @@ function handleAddUserToRoom(ws: WebSocket, data: string) {
   );
 
   const match = data.match(/"indexRoom"\s*:\s*"([^"]+)"/);
-
   const indexRoom = match ? match[1] : undefined;
 
   if (!indexRoom) {
@@ -153,6 +152,21 @@ function handleAddUserToRoom(ws: WebSocket, data: string) {
   }
 
   const room = rooms[indexRoom];
+
+  if (room.players.includes(ws)) {
+    console.log(`Ошибка: игрок уже находится в комнате ${indexRoom}.`);
+    ws.send(
+      JSON.stringify({
+        type: "add_user_to_room",
+        data: JSON.stringify({
+          error: true,
+          errorText: "You are already in this room",
+        }),
+        id: 0,
+      }),
+    );
+    return;
+  }
 
   if (room.players.length >= 2) {
     console.log(`Ошибка: комната ${indexRoom} уже полная.`);
