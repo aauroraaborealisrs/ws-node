@@ -1,15 +1,14 @@
 import { games } from "./ds";
+import sendTurnInfo from "./sendTurnInfo";
 
 export default function startGameSession(gameId: string) {
   const game = games[gameId];
-  if (!game) {
-    console.log(`Ошибка: игра с ID ${gameId} не найдена.`);
-    return;
-  }
+  if (!game) return;
 
   const playerIds = Object.keys(game.players);
-  const currentPlayerIndex = playerIds[0];
-  game.currentPlayerIndex = currentPlayerIndex;
+  game.currentPlayerIndex = playerIds[0];
+
+  sendTurnInfo(gameId);
 
   playerIds.forEach((playerId) => {
     const playerWs = game.players[playerId];
@@ -18,15 +17,14 @@ export default function startGameSession(gameId: string) {
     playerWs.send(
       JSON.stringify({
         type: "start_game",
-        data: {
+        data: JSON.stringify({
           ships: playerShips,
-          currentPlayerIndex,
-          gameId: gameId,
-        },
+          currentPlayerIndex: game.currentPlayerIndex,
+        }),
         id: 0,
       }),
     );
   });
 
-  console.log(`Игра ${gameId} начата. Ход игрока ${currentPlayerIndex}`);
+  console.log(`Игра ${gameId} начата. Ход игрока ${game.currentPlayerIndex}`);
 }
