@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { messageController, players } from "./messageController";
-import { httpServer } from "./http_server/index"; // Импортируем HTTP сервер
+import { httpServer } from "./http_server/index";
 
 const clients: Set<WebSocket> = new Set();
 

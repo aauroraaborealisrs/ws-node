@@ -1,7 +1,15 @@
 import { WebSocket } from "ws";
 
-export const players: { [name: string]: { password: string; wins: number } } =
-  {};
+export const players: {
+  [name: string]: { password: string; wins: number; ws: WebSocket };
+} = {};
+export const rooms: {
+  [roomId: string]: {
+    players: WebSocket[];
+    roomId: string;
+    creatorName: string;
+  };
+} = {};
 
 function handleRegistration(
   ws: WebSocket,
@@ -26,20 +34,21 @@ function handleRegistration(
       ws.send(
         JSON.stringify({
           type: "reg",
-          data: {
+          data: JSON.stringify({
             name,
             password,
             error: true,
             errorText: "Player already exists",
-          },
+          }),
           id: 0,
         }),
       );
       return;
     }
 
-    players[name] = { password, wins: 0 };
+    players[name] = { password, wins: 0, ws };
     console.log(`Игрок ${name} успешно зарегистрирован.`);
+    console.log("Текущие игроки:", players);
 
     ws.send(
       JSON.stringify({
@@ -60,7 +69,157 @@ function handleRegistration(
   }
 }
 
+function handleCreateRoom(ws: WebSocket) {
+  const playerEntry = Object.entries(players).find(
+    ([, value]) => value.ws === ws,
+  );
+
+  if (!playerEntry) {
+    console.log(
+      "Ошибка: Не удалось найти зарегистрированного игрока для создания комнаты.",
+    );
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        data: JSON.stringify({
+          message: "Игрок не найден. Пожалуйста, зарегистрируйтесь.",
+        }),
+        id: 0,
+      }),
+    );
+    return;
+  }
+
+  const [playerName] = playerEntry;
+
+  const roomId = generateRoomId();
+  rooms[roomId] = { players: [ws], roomId, creatorName: playerName };
+  console.log(`Комната ${roomId} создана игроком ${playerName}`);
+  console.log("Текущие комнаты после создания:", rooms);
+
+  ws.send(
+    JSON.stringify({
+      type: "create_room",
+      data: JSON.stringify({
+        roomId,
+        message: "Комната создана, и вы в ней находитесь.",
+      }),
+      id: 0,
+    }),
+  );
+
+  updateRoomState();
+}
+
+function handleAddUserToRoom(
+  ws: WebSocket,
+  data: { indexRoom: string },
+  playerName: string,
+) {
+  const { indexRoom } = data;
+
+  if (!rooms[indexRoom]) {
+    ws.send(
+      JSON.stringify({
+        type: "add_user_to_room",
+        data: JSON.stringify({ error: true, errorText: "Room does not exist" }),
+        id: 0,
+      }),
+    );
+    return;
+  }
+
+  const room = rooms[indexRoom];
+
+  if (room.players.length >= 2) {
+    ws.send(
+      JSON.stringify({
+        type: "add_user_to_room",
+        data: JSON.stringify({
+          error: true,
+          errorText: "Room is already full",
+        }),
+        id: 0,
+      }),
+    );
+    return;
+  }
+
+  room.players.push(ws);
+  console.log(`Игрок ${playerName} присоединился к комнате ${indexRoom}`);
+  console.log("Текущие комнаты:", rooms);
+
+  ws.send(
+    JSON.stringify({
+      type: "add_user_to_room",
+      data: JSON.stringify({
+        roomId: indexRoom,
+        message: "You have joined the room",
+      }),
+      id: 0,
+    }),
+  );
+
+  if (room.players.length === 2) {
+    startGame(room);
+    delete rooms[indexRoom];
+  } else {
+    updateRoomState();
+  }
+}
+
+function generateRoomId() {
+  return `room_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function updateRoomState() {
+  const availableRooms = Object.values(rooms)
+    .filter((room) => room.players.length === 1)
+    .map((room) => ({
+      roomId: room.roomId,
+      roomUsers: [
+        { name: room.creatorName || "Неизвестный игрок", index: room.roomId },
+      ],
+    }));
+
+  console.log("Доступные комнаты для обновления:", availableRooms);
+
+  const message = JSON.stringify({
+    type: "update_room",
+    data: JSON.stringify(availableRooms),
+    id: 0,
+  });
+
+  Object.values(rooms).forEach((room) =>
+    room.players.forEach((player) => {
+      if (player.readyState === WebSocket.OPEN) {
+        player.send(message);
+      }
+    }),
+  );
+}
+
+function startGame(room: { players: WebSocket[]; roomId: string }) {
+  const gameId = generateRoomId();
+  room.players.forEach((player, index) => {
+    player.send(
+      JSON.stringify({
+        type: "create_game",
+        data: JSON.stringify({
+          idGame: gameId,
+          idPlayer: `${gameId}_player${index + 1}`,
+        }),
+        id: 0,
+      }),
+    );
+  });
+  console.log(`Игра началась в комнате ${room.roomId}`);
+}
+
 export const messageController = {
   reg: handleRegistration,
+  create_room: handleCreateRoom,
+  add_user_to_room: handleAddUserToRoom,
   players,
+  rooms,
 };
